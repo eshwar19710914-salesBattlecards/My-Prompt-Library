@@ -52,8 +52,64 @@ const $=id=>document.getElementById(id);
 const all=()=>prompts.concat(extraPrompts);
 function safe(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function render(){const data=all(),cats=[...new Set(data.map(p=>p.category))].sort();$('categories').innerHTML=[['All',data.length],...cats.map(c=>[c,data.filter(p=>p.category===c).length])].map(([c,n])=>'<button class="cat '+(active===c?'active':'')+'" data-cat="'+safe(c)+'"><span>'+safe(c)+'</span><small>'+n+'</small></button>').join('');$('categoryCount').textContent=cats.length;$('totalCount').textContent=data.length;let q=$('search').value.toLowerCase().trim(),level=$('level').value,sort=$('sort').value;let items=data.filter(p=>(active==='All'||p.category===active)&&(!showFav||favourites.has(p.id))&&(!level||p.level===level)&&(!q||[p.title,p.description,p.category,...p.tags,p.prompt].join(' ').toLowerCase().includes(q)));items.sort((a,b)=>sort==='title'?a.title.localeCompare(b.title):b.id.localeCompare(a.id));$('resultCount').textContent='Showing '+items.length+' of '+data.length+' prompts';$('cards').innerHTML=items.length?items.map(p=>'<article class="card"><div class="cardtop"><span class="pill">'+safe(p.category)+'</span><button class="fav '+(favourites.has(p.id)?'on':'')+'" data-fav="'+safe(p.id)+'">'+(favourites.has(p.id)?'★':'☆')+'</button></div><h3>'+safe(p.title)+'</h3><p>'+safe(p.description)+'</p><div class="tags">'+p.tags.slice(0,3).map(t=>'<span class="tag">'+safe(t)+'</span>').join('')+'<span class="tag">'+safe(p.level||'Custom')+'</span></div><div class="cardfoot"><small>Reusable template</small><button class="btn" data-open="'+safe(p.id)+'">View prompt →</button></div></article>').join(''):'<div class="empty">No prompts match these filters. Try another search or clear filters.</div>';}
-function metaPromptFor(p){if(p.id==='concept-note-generator')return p.prompt;const roles={'Product Management':'You are a senior product strategist and product discovery advisor.','Project & Agile Delivery':'You are a senior programme delivery leader and pragmatic project governance advisor.','AI & GenAI':'You are an AI solution architect and responsible GenAI product advisor.','Data Analytics':'You are a rigorous data analyst and applied statistics coach.','Leadership':'You are an experienced leadership, communication, and stakeholder influence coach.','Finance':'You are a commercial finance and business modelling advisor.','EMBA & Academics':'You are an MBA/EMBA academic coach who helps produce rigorous, well-structured, evidence-based work.','Digital Transformation':'You are a digital transformation strategist and enterprise technology advisor.'};const role=roles[p.category]||'You are an experienced professional advisor.';return '# ROLE & OBJECTIVE\\n\\n'+role+' Your task is to help the user complete: '+p.title+'. '+p.description+'\\n\\n# CONTEXT & INPUTS\\n\\nUse the context supplied by the user. The task brief and required inputs are: \\n\\n'+p.prompt+'\\n\\nTreat user-provided details as the primary source of truth. Do not silently invent organisation-specific facts, evidence, metrics, stakeholder views, technical constraints, or references. If an important input is absent, identify it explicitly.\\n\\n# WORKING PRINCIPLES\\n\\n1. Preserve the user’s intent and terminology while improving clarity and structure.\\n2. Distinguish verified facts, user assumptions, estimates, and your recommendations.\\n3. Make reasoning transparent and explain material trade-offs.\\n4. Use practical, domain-appropriate language; explain specialist terms when needed.\\n5. Prefer specific, actionable outputs over generic advice.\\n6. Do not fabricate data, citations, benchmark values, customer feedback, or compliance requirements.\\n\\n# WORKFLOW\\n\\n1. Interpret the request, audience, decision to be supported, and desired outcome.\\n2. Check whether the supplied inputs are sufficient. Ask only one focused clarification at a time when a missing detail materially changes the answer; otherwise proceed and state reasonable assumptions.\\n3. Analyse the task using appropriate professional methods and the evidence supplied. Show calculations, logic, prioritisation criteria, or evaluation assumptions where relevant.\\n4. Develop the requested artefact in a clear sequence, ensuring each section supports the stated objective.\\n5. Review the result for completeness, internal consistency, feasibility, bias, missing evidence, and unintended implications.\\n\\n# OUTPUT REQUIREMENTS\\n\\nProduce a polished, ready-to-use result for '+p.title+'. Include a concise executive summary or key conclusion where useful; structured sections aligned to the task; tables only when they improve comparison or clarity; explicit assumptions, dependencies, risks, and open questions; and recommended next decisions or actions where appropriate. Follow the task-specific output requirements in the brief above.\\n\\n# INTERACTION & QUALITY RULES\\n\\nBe collaborative, clear, professional, and appropriately challenging. Do not overwhelm the user with a long questionnaire. If the user is learning, explain the rationale as well as the answer. If information is uncertain, say so. Never present an illustrative example as actual evidence. Keep the final response proportionate to the complexity of the task and make it easy to review, edit, and use.';}\nfunction view(id){current=all().find(p=>p.id===id);if(!current)return;$('dcat').textContent=current.category;$('dtitle').textContent=current.title;$('ddesc').textContent=current.description;const source=metaPromptFor(current);let vars=[...new Set([...source.matchAll(/\\{\\{([a-zA-Z0-9_]+)\\}\\}/g)].map(m=>m[1]))];$('vars').innerHTML=vars.map(v=>{let label=v.replace(/_/g,' ');if(['brief','rubric','draft'].includes(v)){return '<div><label for="v-'+v+'">'+label+'</label><textarea class="field sourcearea" id="v-'+v+'" placeholder="Paste '+label+' text here, or upload a PDF/TXT file"></textarea><div class="uploadrow"><label class="btn" for="file-'+v+'">Upload PDF / TXT</label><input type="file" id="file-'+v+'" accept=".pdf,.txt,application/pdf,text/plain"><span class="uploadhint" id="status-'+v+'">PDF text is extracted locally in this browser</span></div></div>';}return '<div><label for="v-'+v+'">'+label+'</label><input class="field" id="v-'+v+'" placeholder="Enter '+label+'"></div>';}).join('');$('promptText').textContent=source;$('viewOverlay').classList.add('show');}
-function customText(){let text=metaPromptFor(current);for(const m of text.matchAll(/\\{\\{([a-zA-Z0-9_]+)\\}\\}/g)){let input=$('v-'+m[1]);if(input&&input.value.trim())text=text.split(m[0]).join(input.value.trim());}return text;}
+function metaPromptFor(p){
+ if(p.id==='concept-note-generator')return p.prompt;
+ const roles={
+ 'Product Management':'You are a senior product strategist and product discovery advisor.',
+ 'Project & Agile Delivery':'You are a senior programme delivery leader and pragmatic project governance advisor.',
+ 'AI & GenAI':'You are an AI solution architect and responsible GenAI product advisor.',
+ 'Data Analytics':'You are a rigorous data analyst and applied statistics coach.',
+ 'Leadership':'You are an experienced leadership, communication, and stakeholder influence coach.',
+ 'Finance':'You are a commercial finance and business modelling advisor.',
+ 'EMBA & Academics':'You are an MBA/EMBA academic coach who helps produce rigorous, well-structured, evidence-based work.',
+ 'Digital Transformation':'You are a digital transformation strategist and enterprise technology advisor.'
+ };
+ const role=roles[p.category]||'You are an experienced professional advisor.';
+ return '# ROLE & OBJECTIVE\n\n'+role+' Your task is to help the user complete: '+p.title+'. '+p.description+'.\n\n'+
+ '# CONTEXT & INPUTS\n\nUse the context supplied by the user. The task brief and required inputs are:\n\n'+p.prompt+'\n\n'+
+ 'Treat user-provided details as the primary source of truth. Do not silently invent organisation-specific facts, evidence, metrics, stakeholder views, technical constraints, or references. If an important input is absent, identify it explicitly.\n\n'+
+ '# WORKING PRINCIPLES\n\n'+
+ '1. Preserve the user’s intent and terminology while improving clarity and structure.\n'+
+ '2. Distinguish verified facts, user assumptions, estimates, and your recommendations.\n'+
+ '3. Make reasoning transparent and explain material trade-offs.\n'+
+ '4. Use practical, domain-appropriate language; explain specialist terms when needed.\n'+
+ '5. Prefer specific, actionable outputs over generic advice.\n'+
+ '6. Do not fabricate data, citations, benchmark values, customer feedback, or compliance requirements.\n\n'+
+ '# WORKFLOW\n\n'+
+ '1. Interpret the request, audience, decision to be supported, and desired outcome.\n'+
+ '2. Check whether the supplied inputs are sufficient. Ask only one focused clarification at a time when a missing detail materially changes the answer; otherwise proceed and state reasonable assumptions.\n'+
+ '3. Analyse the task using appropriate professional methods and the evidence supplied. Show calculations, logic, prioritisation criteria, or evaluation assumptions where relevant.\n'+
+ '4. Develop the requested artefact in a clear sequence, ensuring each section supports the stated objective.\n'+
+ '5. Review the result for completeness, internal consistency, feasibility, bias, missing evidence, and unintended implications.\n\n'+
+ '# OUTPUT REQUIREMENTS\n\nProduce a polished, ready-to-use result for '+p.title+'. Include a concise executive summary or key conclusion where useful; structured sections aligned to the task; tables only when they improve comparison or clarity; explicit assumptions, dependencies, risks, and open questions; and recommended next decisions or actions where appropriate. Follow the task-specific output requirements in the brief above.\n\n'+
+ '# INTERACTION & QUALITY RULES\n\nBe collaborative, clear, professional, and appropriately challenging. Do not overwhelm the user with a long questionnaire. If the user is learning, explain the rationale as well as the answer. If information is uncertain, say so. Never present an illustrative example as actual evidence. Keep the final response proportionate to the complexity of the task and make it easy to review, edit, and use.';
+}
+function view(id){
+ current=all().find(p=>p.id===id);
+ if(!current)return;
+ $('dcat').textContent=current.category;
+ $('dtitle').textContent=current.title;
+ $('ddesc').textContent=current.description;
+ const source=metaPromptFor(current);
+ let vars=[...new Set([...source.matchAll(/\{\{([a-zA-Z0-9_]+)\}\}/g)].map(m=>m[1]))];
+ $('vars').innerHTML=vars.map(v=>{
+  let label=v.replace(/_/g,' ');
+  if(['brief','rubric','draft'].includes(v)){
+   return '<div><label for="v-'+v+'">'+label+'</label><textarea class="field sourcearea" id="v-'+v+'" placeholder="Paste '+label+' text here, or upload a PDF/TXT file"></textarea><div class="uploadrow"><label class="btn" for="file-'+v+'">Upload PDF / TXT</label><input type="file" id="file-'+v+'" accept=".pdf,.txt,application/pdf,text/plain"><span class="uploadhint" id="status-'+v+'">PDF text is extracted locally in this browser</span></div></div>';
+  }
+  return '<div><label for="v-'+v+'">'+label+'</label><input class="field" id="v-'+v+'" placeholder="Enter '+label+'"></div>';
+ }).join('');
+ $('promptText').textContent=source;
+ $('viewOverlay').classList.add('show');
+}
+function customText(){
+ let text=metaPromptFor(current);
+ for(const m of text.matchAll(/\{\{([a-zA-Z0-9_]+)\}\}/g)){
+  let input=$('v-'+m[1]);
+  if(input&&input.value.trim())text=text.split(m[0]).join(input.value.trim());
+ }
+ return text;
+}
 async function copyText(text){try{await navigator.clipboard.writeText(text);}catch(e){let area=document.createElement('textarea');area.value=text;document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();} $('copyCustom').textContent='Copied ✓';setTimeout(()=>$('copyCustom').textContent='Copy customised prompt',1300);}
 document.addEventListener('click',e=>{let c=e.target.closest('[data-cat]'),o=e.target.closest('[data-open]'),f=e.target.closest('[data-fav]');if(c){active=c.dataset.cat;showFav=false;render();}if(o)view(o.dataset.open);if(f){let id=f.dataset.fav;favourites.has(id)?favourites.delete(id):favourites.add(id);localStorage.setItem('mpl-favs',JSON.stringify([...favourites]));render();}});
 ['search','level','sort'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',render));
